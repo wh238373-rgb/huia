@@ -50,7 +50,7 @@ function gateQuoteVolumeUsd(contract) {
     return baseVolume * price;
   }
 
-  return 0;
+  return null;
 }
 
 function mexcQuoteVolumeUsd(contract) {
@@ -58,7 +58,7 @@ function mexcQuoteVolumeUsd(contract) {
     numberOrNull(contract.amount24) ??
     numberOrNull(contract.turnoverVolume) ??
     numberOrNull(contract.volume24) ??
-    0
+    null
   );
 }
 
@@ -181,13 +181,15 @@ export class MarketDataService {
       const currentPrice = numberOrNull(ticker.lastPrice);
       const fairPrice = numberOrNull(ticker.fairPrice) ?? numberOrNull(ticker.holdFairPrice);
       const quoteVolume = mexcQuoteVolumeUsd(ticker);
+      const failsVolumeFilter =
+        Number.isFinite(quoteVolume) && quoteVolume < min24hQuoteVolumeUsd;
 
       if (
         !symbol ||
         !Number.isFinite(currentPrice) ||
         !Number.isFinite(fairPrice) ||
         fairPrice <= 0 ||
-        quoteVolume < min24hQuoteVolumeUsd
+        failsVolumeFilter
       ) {
         continue;
       }
@@ -211,13 +213,15 @@ export class MarketDataService {
       const currentPrice = numberOrNull(contract.last_price);
       const fairPrice = numberOrNull(contract.mark_price);
       const quoteVolume = gateQuoteVolumeUsd(contract);
+      const failsVolumeFilter =
+        Number.isFinite(quoteVolume) && quoteVolume < min24hQuoteVolumeUsd;
 
       if (
         !gateId ||
         !Number.isFinite(currentPrice) ||
         !Number.isFinite(fairPrice) ||
         fairPrice <= 0 ||
-        quoteVolume < min24hQuoteVolumeUsd
+        failsVolumeFilter
       ) {
         continue;
       }
