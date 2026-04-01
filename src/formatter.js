@@ -76,8 +76,22 @@ export function formatSignalClosedMessage(signal) {
   const finalPrice = signal.lastPayload?.currentPrice;
   const finalDeviation =
     signal.lastPayload?.currentDeviation ?? signal.lastSpreadPercent;
+  const exchange = signal.exchange || signal.lastPayload?.exchange || signal.trackedExchange || "MEXC";
+  const symbol = signal.symbol || signal.lastPayload?.symbol || "";
+  const token = assetName(symbol);
+  const marketCapUsd = signal.marketCapUsd ?? signal.lastPayload?.marketCapUsd;
+  const exchangeMeta = getExchangeMeta(exchange);
+  const maxLeverage = signal.lastPayload?.maxLeverage
+    ? `${String(signal.lastPayload.maxLeverage).replace(/x$/i, "")}x`
+    : exchangeMeta.maxLeverage;
+  const maxPositionUsd = signal.lastPayload?.maxPositionUsd ?? exchangeMeta.maxPositionUsd;
 
   return [
+    `${exchangeIcon(exchange)} ${exchange} ${token}`,
+    `Ⓜ️ MC: ${formatUsdCompact(marketCapUsd)} | ${token}`,
+    "",
+    `💪 Макс. плече: ${maxLeverage}`,
+    `💰 Макс. позиція: ${formatUsdInteger(maxPositionUsd)}`,
     "━━━━━━━━━━━━━━━━━━━━━━━",
     "✅ Ціни зійшлись!",
     `💰 Фінальна ціна: ${formatFullPrice(finalPrice)}`,
