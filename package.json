@@ -1,0 +1,10 @@
+{
+  "name": "mexc-gate-spread-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "find src -name '*.js' -maxdepth 4 -print0 | xargs -0 -n1 node --check"
+  }
+}
