@@ -3,6 +3,8 @@ import {
   formatChannelMessage,
   formatSignalClosedMessage
 } from "../formatter.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { sleep } from "../utils.js";
 
 export class TelegramNotifier {
@@ -10,12 +12,37 @@ export class TelegramNotifier {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
     this.chatId = chatId;
     this.threadId = threadId;
-    this.messageIds = new Map();
+    this.stateFile = resolve(process.cwd(), ".runtime", "telegram-message-ids.json");
+    this.messageIds = this.loadMessageIds();
     this.queue = Promise.resolve();
   }
 
   messageKey(payload) {
     return `${payload.exchange || payload.trackedExchange}:${payload.symbol}`;
+  }
+
+  loadMessageIds() {
+    try {
+      if (!existsSync(this.stateFile)) {
+        return new Map();
+      }
+
+      const raw = readFileSync(this.stateFile, "utf8");
+      const parsed = JSON.parse(raw);
+
+      return new Map(Object.entries(parsed));
+    } catch {
+      return new Map();
+    }
+  }
+
+  persistMessageIds() {
+    mkdirSync(dirname(this.stateFile), { recursive: true });
+    writeFileSync(
+      this.stateFile,
+      JSON.stringify(Object.fromEntries(this.messageIds), null, 2),
+      "utf8"
+    );
   }
 
   async onSignalOpen(opportunity) {
@@ -36,6 +63,7 @@ export class TelegramNotifier {
 
       if (messageId) {
         this.messageIds.set(this.messageKey(opportunity), messageId);
+        this.persistMessageIds();
       }
     });
   }
@@ -76,6 +104,7 @@ export class TelegramNotifier {
       });
 
       this.messageIds.delete(this.messageKey(activeSignal));
+      this.persistMessageIds();
     });
   }
 
