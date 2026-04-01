@@ -25,6 +25,14 @@ function assetName(symbol) {
   return symbol.replace(/USDT$/, "");
 }
 
+function tradeDirectionLabel(deviation) {
+  if (!Number.isFinite(deviation)) {
+    return "Невизначено";
+  }
+
+  return deviation < 0 ? "Лонг" : "Шорт";
+}
+
 export function buildSignalReplyMarkup(payload) {
   const token = assetName(payload.symbol);
 
@@ -57,11 +65,13 @@ export function formatChannelMessage(opportunity) {
     ? `${String(opportunity.maxLeverage).replace(/x$/i, "")}x`
     : exchangeMeta.maxLeverage;
   const maxPositionUsd = opportunity.maxPositionUsd ?? exchangeMeta.maxPositionUsd;
+  const direction = tradeDirectionLabel(currentDeviation);
 
   return [
     `${exchangeIcon(currentExchange)} ${currentExchange} ${percentText} ${opportunity.symbol}`,
     `Ⓜ️ MC: ${formatUsdCompact(opportunity.marketCapUsd)} | ${assetName(opportunity.symbol)}`,
     "",
+    `🎯 Вхід: ${direction}`,
     `🟢 Ціна: ${formatFullPrice(currentPrice)}`,
     `⚖️ Справедлива: ${formatFullPrice(fairPrice)}`,
     "=========================",
@@ -85,11 +95,13 @@ export function formatSignalClosedMessage(signal) {
     ? `${String(signal.lastPayload.maxLeverage).replace(/x$/i, "")}x`
     : exchangeMeta.maxLeverage;
   const maxPositionUsd = signal.lastPayload?.maxPositionUsd ?? exchangeMeta.maxPositionUsd;
+  const direction = tradeDirectionLabel(finalDeviation);
 
   return [
     `${exchangeIcon(exchange)} ${exchange} ${token}`,
     `Ⓜ️ MC: ${formatUsdCompact(marketCapUsd)} | ${token}`,
     "",
+    `🎯 Вхід був: ${direction}`,
     `💪 Макс. плече: ${maxLeverage}`,
     `💰 Макс. позиція: ${formatUsdInteger(maxPositionUsd)}`,
     "━━━━━━━━━━━━━━━━━━━━━━━",
