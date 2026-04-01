@@ -86,24 +86,32 @@ export async function fetchCommonSymbols(quoteCurrency) {
       .map((item) => [normalizeGateId(item.name), item])
   );
 
-  const commonSymbols = [];
+  const allSymbols = new Map();
 
   for (const [symbol, mexcContract] of mexcSymbols) {
-    const gateContract = gateSymbols.get(symbol);
+    allSymbols.set(symbol, {
+      symbol,
+      mexcContract,
+      gateContract: gateSymbols.get(symbol) || null
+    });
+  }
 
-    if (!gateContract) {
+  for (const [symbol, gateContract] of gateSymbols) {
+    const existing = allSymbols.get(symbol);
+
+    if (existing) {
+      existing.gateContract = gateContract;
       continue;
     }
 
-    commonSymbols.push({
+    allSymbols.set(symbol, {
       symbol,
-      mexcContract,
+      mexcContract: null,
       gateContract
     });
   }
 
-  commonSymbols.sort((a, b) => a.symbol.localeCompare(b.symbol));
-  return commonSymbols;
+  return Array.from(allSymbols.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
 export async function fetchMarketSnapshot(commonSymbols, min24hQuoteVolumeUsd) {
@@ -186,17 +194,12 @@ export async function fetchMarketSnapshot(commonSymbols, min24hQuoteVolumeUsd) {
     .map(({ symbol }) => {
       const mexc = mexcMap.get(symbol);
       const gate = gateMap.get(symbol);
-
-      if (!mexc || !gate) {
-        return null;
-      }
-
       return {
         symbol,
-        mexc,
-        gate,
+        mexc: mexc || null,
+        gate: gate || null,
         updatedAt
       };
     })
-    .filter(Boolean);
+    .filter((item) => item.mexc || item.gate);
 }

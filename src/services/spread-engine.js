@@ -21,9 +21,22 @@ function buildExchangeOpportunity(symbol, exchangeData, updatedAt, thresholdPerc
 
 export function buildOpportunities(contracts, thresholdPercent) {
   return contracts
-    .flatMap((contract) => [
-      buildExchangeOpportunity(contract.symbol, contract.mexc, contract.updatedAt, thresholdPercent),
-      buildExchangeOpportunity(contract.symbol, contract.gate, contract.updatedAt, thresholdPercent)
-    ])
+    .flatMap((contract) => {
+      const opportunities = [];
+
+      if (contract.mexc) {
+        opportunities.push(
+          buildExchangeOpportunity(contract.symbol, contract.mexc, contract.updatedAt, thresholdPercent)
+        );
+      }
+
+      if (contract.gate) {
+        opportunities.push(
+          buildExchangeOpportunity(contract.symbol, contract.gate, contract.updatedAt, thresholdPercent)
+        );
+      }
+
+      return opportunities;
+    })
     .sort((a, b) => b.absDeviationPercent - a.absDeviationPercent);
 }

@@ -32,6 +32,10 @@ function buildRenderKey(displayOpportunity) {
   ].join("|");
 }
 
+function formatCandidateLine(item) {
+  return `${item.exchange} ${item.symbol} current=${item.currentPrice.toFixed(6)} fair=${item.fairPrice.toFixed(6)} dev=${item.deviationPercent.toFixed(2)}%`;
+}
+
 export class MarketScanner {
   constructor({
     quoteCurrency,
@@ -85,6 +89,13 @@ export class MarketScanner {
       .filter((item) => item.isTriggered)
       .slice(0, this.maxActiveSignals);
     const currentKeys = new Set(triggered.map((item) => `${item.exchange}:${item.symbol}`));
+
+    const strongest = opportunities[0] || null;
+    console.log(
+      `[scan] exchanges=${marketSnapshot.length} candidates=${opportunities.length} triggered=${triggered.length}${
+        strongest ? ` | top=${formatCandidateLine(strongest)}` : ""
+      }`
+    );
 
     await this.notifier?.onBoard?.(
       opportunities.slice(0, this.topSignals),
