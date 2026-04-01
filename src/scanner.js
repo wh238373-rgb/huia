@@ -36,6 +36,24 @@ function formatCandidateLine(item) {
   return `${item.exchange} ${item.symbol} current=${item.currentPrice.toFixed(6)} fair=${item.fairPrice.toFixed(6)} dev=${item.deviationPercent.toFixed(2)}%`;
 }
 
+function splitByExchange(opportunities) {
+  const mexc = [];
+  const gate = [];
+
+  for (const item of opportunities) {
+    if (item.exchange === "MEXC") {
+      mexc.push(item);
+      continue;
+    }
+
+    if (item.exchange === "GATE") {
+      gate.push(item);
+    }
+  }
+
+  return { mexc, gate };
+}
+
 export class MarketScanner {
   constructor({
     quoteCurrency,
@@ -44,6 +62,7 @@ export class MarketScanner {
     notifier,
     topSignals,
     maxActiveSignals,
+    maxActiveSignalsPerExchange,
     minSignalUpdateMs,
     min24hQuoteVolumeUsd,
     requestTimeoutMs,
@@ -55,6 +74,7 @@ export class MarketScanner {
     this.notifier = notifier;
     this.topSignals = topSignals;
     this.maxActiveSignals = maxActiveSignals;
+    this.maxActiveSignalsPerExchange = maxActiveSignalsPerExchange;
     this.minSignalUpdateMs = minSignalUpdateMs;
     this.min24hQuoteVolumeUsd = min24hQuoteVolumeUsd;
     this.commonSymbols = [];
@@ -92,20 +112,36 @@ export class MarketScanner {
     );
     const marketSnapshot = marketResult.items;
     const opportunities = buildOpportunities(marketSnapshot, this.thresholdPercent);
-    const triggered = opportunities
+    const { mexc: mexcOpportunities, gate: gateOpportunities } = splitByExchange(opportunities);
+    const mexcTriggered = mexcOpportunities
       .filter((item) => item.isTriggered)
-      .slice(0, this.maxActiveSignals);
+      .slice(0, this.maxActiveSignalsPerExchange);
+    const gateTriggered = gateOpportunities
+      .filter((item) => item.isTriggered)
+      .slice(0, this.maxActiveSignalsPerExchange);
+    const triggered = [...mexcTriggered, ...gateTriggered]
+      .sort((a, b) => b.absDeviationPercent - a.absDeviationPercent)
+      .slice(0, this.maxActiveSignalsPerExchange * 2);
     const currentKeys = new Set(triggered.map((item) => `${item.exchange}:${item.symbol}`));
 
     const strongest = opportunities[0] || null;
+    const strongestMexc = mexcOpportunities[0] || null;
+    const strongestGate = gateOpportunities[0] || null;
     console.log(
-      `[scan] symbols=${marketSnapshot.length} mexc=${marketResult.meta.mexcCount}${marketResult.meta.mexcUsedCache ? "(cache)" : ""} gate=${marketResult.meta.gateCount}${marketResult.meta.gateUsedCache ? "(cache)" : ""} candidates=${opportunities.length} triggered=${triggered.length}${
-        strongest ? ` | top=${formatCandidateLine(strongest)}` : ""
+      `[scan] symbols=${marketSnapshot.length} mexc=${marketResult.meta.mexcCount}${marketResult.meta.mexcUsedCache ? "(cache)" : ""} gate=${marketResult.meta.gateCount}${marketResult.meta.gateUsedCache ? "(cache)" : ""} candidates=${opportunities.length} triggered_total=${triggered.length} triggered_mexc=${mexcTriggered.length} triggered_gate=${gateTriggered.length}${
+        strongestMexc ? ` | mexc_top=${formatCandidateLine(strongestMexc)}` : ""
+      }${
+        strongestGate ? ` | gate_top=${formatCandidateLine(strongestGate)}` : ""
+      }${
+        !strongestMexc && !strongestGate && strongest ? ` | top=${formatCandidateLine(strongest)}` : ""
       }`
     );
 
     await this.notifier?.onBoard?.(
-      opportunities.slice(0, this.topSignals),
+      [
+        ...mexcOpportunities.slice(0, this.topSignals),
+        ...gateOpportunities.slice(0, this.topSignals)
+      ].sort((a, b) => b.absDeviationPercent - a.absDeviationPercent),
       this.thresholdPercent,
       marketSnapshot.length
     );

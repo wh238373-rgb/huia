@@ -45,6 +45,10 @@ export const config = {
   quoteCurrency: (process.env.QUOTE_CURRENCY || "USDT").toUpperCase(),
   topSignals: numberFromEnv("TOP_SIGNALS", 5),
   maxActiveSignals: numberFromEnv("MAX_ACTIVE_SIGNALS", 3),
+  maxActiveSignalsPerExchange: numberFromEnv(
+    "MAX_ACTIVE_SIGNALS_PER_EXCHANGE",
+    numberFromEnv("MAX_ACTIVE_SIGNALS", 3)
+  ),
   minSignalUpdateMs: numberFromEnv("MIN_SIGNAL_UPDATE_MS", 15000),
   min24hQuoteVolumeUsd: numberFromEnv("MIN_24H_QUOTE_VOLUME_USD", 1000000),
   requestTimeoutMs: numberFromEnv("REQUEST_TIMEOUT_MS", 45000),

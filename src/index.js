@@ -27,6 +27,7 @@ const scanner = new MarketScanner({
   notifier,
   topSignals: config.topSignals,
   maxActiveSignals: config.maxActiveSignals,
+  maxActiveSignalsPerExchange: config.maxActiveSignalsPerExchange,
   minSignalUpdateMs: config.minSignalUpdateMs,
   min24hQuoteVolumeUsd: config.min24hQuoteVolumeUsd,
   requestTimeoutMs: config.requestTimeoutMs,
