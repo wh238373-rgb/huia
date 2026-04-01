@@ -1,4 +1,4 @@
-import { fetchJson, nowIso } from "../utils.js";
+import { fetchJson, nowIso, retry } from "../utils.js";
 
 const MEXC_FUTURES_DETAIL_URL = "https://contract.mexc.com/api/v1/contract/detail";
 const MEXC_FUTURES_TICKER_URL = "https://contract.mexc.com/api/v1/contract/ticker";
@@ -64,8 +64,14 @@ function mexcQuoteVolumeUsd(contract) {
 
 export async function fetchCommonSymbols(quoteCurrency) {
   const [mexcContractsResponse, gateContractsResponse] = await Promise.all([
-    fetchJson(MEXC_FUTURES_DETAIL_URL),
-    fetchJson(GATE_FUTURES_CONTRACTS_URL)
+    retry(() => fetchJson(MEXC_FUTURES_DETAIL_URL, { timeoutMs: 45000 }), {
+      retries: 2,
+      delayMs: 1500
+    }),
+    retry(() => fetchJson(GATE_FUTURES_CONTRACTS_URL, { timeoutMs: 45000 }), {
+      retries: 2,
+      delayMs: 1500
+    })
   ]);
 
   const mexcContracts = asArray(mexcContractsResponse);
@@ -114,92 +120,148 @@ export async function fetchCommonSymbols(quoteCurrency) {
   return Array.from(allSymbols.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
-export async function fetchMarketSnapshot(commonSymbols, min24hQuoteVolumeUsd) {
-  const [mexcTickerResponse, gateContractsResponse] = await Promise.all([
-    fetchJson(MEXC_FUTURES_TICKER_URL),
-    fetchJson(GATE_FUTURES_CONTRACTS_URL)
-  ]);
-
-  const mexcTickers = asArray(mexcTickerResponse);
-  const gateContracts = asArray(gateContractsResponse);
-
-  const mexcMap = new Map();
-
-  for (const ticker of mexcTickers) {
-    const symbol = normalizeMexcId(String(ticker.symbol || ""));
-    const currentPrice = numberOrNull(ticker.lastPrice);
-    const fairPrice = numberOrNull(ticker.fairPrice) ?? numberOrNull(ticker.holdFairPrice);
-    const quoteVolume = mexcQuoteVolumeUsd(ticker);
-
-    if (
-      !symbol ||
-      !Number.isFinite(currentPrice) ||
-      !Number.isFinite(fairPrice) ||
-      fairPrice <= 0 ||
-      quoteVolume < min24hQuoteVolumeUsd
-    ) {
-      continue;
-    }
-
-    mexcMap.set(symbol, {
-      exchange: "MEXC",
-      symbol,
-      currentPrice,
-      fairPrice,
-      quoteVolume,
-      maxLeverage: String(ticker.maxLeverage ?? ""),
-      maxPositionUsd: numberOrNull(ticker.maxVol) ?? null
-    });
+export class MarketDataService {
+  constructor({ requestTimeoutMs = 45000, requestRetries = 2 } = {}) {
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.requestRetries = requestRetries;
+    this.lastMexcTickers = [];
+    this.lastGateContracts = [];
   }
 
-  const gateMap = new Map();
+  async fetchLatest() {
+    const [mexcResult, gateResult] = await Promise.allSettled([
+      retry(
+        () => fetchJson(MEXC_FUTURES_TICKER_URL, { timeoutMs: this.requestTimeoutMs }),
+        { retries: this.requestRetries, delayMs: 1500 }
+      ),
+      retry(
+        () => fetchJson(GATE_FUTURES_CONTRACTS_URL, { timeoutMs: this.requestTimeoutMs }),
+        { retries: this.requestRetries, delayMs: 1500 }
+      )
+    ]);
 
-  for (const contract of gateContracts) {
-    const gateId = String(contract.name || "");
-    const symbol = normalizeGateId(gateId);
-    const currentPrice = numberOrNull(contract.last_price);
-    const fairPrice = numberOrNull(contract.mark_price);
-    const quoteVolume = gateQuoteVolumeUsd(contract);
+    let mexcUsedCache = false;
+    let gateUsedCache = false;
 
-    if (
-      !gateId ||
-      !Number.isFinite(currentPrice) ||
-      !Number.isFinite(fairPrice) ||
-      fairPrice <= 0 ||
-      quoteVolume < min24hQuoteVolumeUsd
-    ) {
-      continue;
+    if (mexcResult.status === "fulfilled") {
+      this.lastMexcTickers = asArray(mexcResult.value);
+    } else if (this.lastMexcTickers.length > 0) {
+      mexcUsedCache = true;
+    } else {
+      throw mexcResult.reason;
     }
 
-    gateMap.set(symbol, {
-      exchange: "GATE",
-      symbol,
-      contractName: gateId,
-      currentPrice,
-      fairPrice,
-      quoteVolume,
-      maxLeverage: String(contract.leverage_max || ""),
-      maxPositionUsd:
-        numberOrNull(contract.order_size_max) && numberOrNull(contract.quanto_multiplier)
-          ? Number(contract.order_size_max) *
-            Number(contract.quanto_multiplier) *
-            currentPrice
-          : null
-    });
+    if (gateResult.status === "fulfilled") {
+      this.lastGateContracts = asArray(gateResult.value);
+    } else if (this.lastGateContracts.length > 0) {
+      gateUsedCache = true;
+    } else {
+      throw gateResult.reason;
+    }
+
+    return {
+      mexcTickers: this.lastMexcTickers,
+      gateContracts: this.lastGateContracts,
+      mexcUsedCache,
+      gateUsedCache
+    };
   }
 
-  const updatedAt = nowIso();
+  async fetchMarketSnapshot(commonSymbols, min24hQuoteVolumeUsd) {
+    const {
+      mexcTickers,
+      gateContracts,
+      mexcUsedCache,
+      gateUsedCache
+    } = await this.fetchLatest();
+    const mexcMap = new Map();
 
-  return commonSymbols
-    .map(({ symbol }) => {
-      const mexc = mexcMap.get(symbol);
-      const gate = gateMap.get(symbol);
-      return {
+    for (const ticker of mexcTickers) {
+      const symbol = normalizeMexcId(String(ticker.symbol || ""));
+      const currentPrice = numberOrNull(ticker.lastPrice);
+      const fairPrice = numberOrNull(ticker.fairPrice) ?? numberOrNull(ticker.holdFairPrice);
+      const quoteVolume = mexcQuoteVolumeUsd(ticker);
+
+      if (
+        !symbol ||
+        !Number.isFinite(currentPrice) ||
+        !Number.isFinite(fairPrice) ||
+        fairPrice <= 0 ||
+        quoteVolume < min24hQuoteVolumeUsd
+      ) {
+        continue;
+      }
+
+      mexcMap.set(symbol, {
+        exchange: "MEXC",
         symbol,
-        mexc: mexc || null,
-        gate: gate || null,
-        updatedAt
-      };
-    })
-    .filter((item) => item.mexc || item.gate);
+        currentPrice,
+        fairPrice,
+        quoteVolume,
+        maxLeverage: String(ticker.maxLeverage ?? ""),
+        maxPositionUsd: numberOrNull(ticker.maxVol) ?? null
+      });
+    }
+
+    const gateMap = new Map();
+
+    for (const contract of gateContracts) {
+      const gateId = String(contract.name || "");
+      const symbol = normalizeGateId(gateId);
+      const currentPrice = numberOrNull(contract.last_price);
+      const fairPrice = numberOrNull(contract.mark_price);
+      const quoteVolume = gateQuoteVolumeUsd(contract);
+
+      if (
+        !gateId ||
+        !Number.isFinite(currentPrice) ||
+        !Number.isFinite(fairPrice) ||
+        fairPrice <= 0 ||
+        quoteVolume < min24hQuoteVolumeUsd
+      ) {
+        continue;
+      }
+
+      gateMap.set(symbol, {
+        exchange: "GATE",
+        symbol,
+        contractName: gateId,
+        currentPrice,
+        fairPrice,
+        quoteVolume,
+        maxLeverage: String(contract.leverage_max || ""),
+        maxPositionUsd:
+          numberOrNull(contract.order_size_max) && numberOrNull(contract.quanto_multiplier)
+            ? Number(contract.order_size_max) *
+              Number(contract.quanto_multiplier) *
+              currentPrice
+            : null
+      });
+    }
+
+    const updatedAt = nowIso();
+
+    const items = commonSymbols
+      .map(({ symbol }) => {
+        const mexc = mexcMap.get(symbol);
+        const gate = gateMap.get(symbol);
+        return {
+          symbol,
+          mexc: mexc || null,
+          gate: gate || null,
+          updatedAt
+        };
+      })
+      .filter((item) => item.mexc || item.gate);
+
+    return {
+      items,
+      meta: {
+        mexcCount: mexcMap.size,
+        gateCount: gateMap.size,
+        mexcUsedCache,
+        gateUsedCache
+      }
+    };
+  }
 }

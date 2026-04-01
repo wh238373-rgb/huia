@@ -1,4 +1,4 @@
-import { fetchCommonSymbols, fetchMarketSnapshot } from "./services/market-data.js";
+import { fetchCommonSymbols, MarketDataService } from "./services/market-data.js";
 import { MarketCapService } from "./services/market-cap-service.js";
 import { buildOpportunities } from "./services/spread-engine.js";
 import { pctDiff } from "./utils.js";
@@ -45,7 +45,9 @@ export class MarketScanner {
     topSignals,
     maxActiveSignals,
     minSignalUpdateMs,
-    min24hQuoteVolumeUsd
+    min24hQuoteVolumeUsd,
+    requestTimeoutMs,
+    requestRetries
   }) {
     this.quoteCurrency = quoteCurrency;
     this.thresholdPercent = thresholdPercent;
@@ -58,6 +60,10 @@ export class MarketScanner {
     this.commonSymbols = [];
     this.activeSignals = new Map();
     this.marketCapService = new MarketCapService();
+    this.marketDataService = new MarketDataService({
+      requestTimeoutMs,
+      requestRetries
+    });
   }
 
   async start() {
@@ -66,7 +72,7 @@ export class MarketScanner {
         if (this.commonSymbols.length === 0) {
           this.commonSymbols = await fetchCommonSymbols(this.quoteCurrency);
           console.log(
-            `Loaded ${this.commonSymbols.length} common ${this.quoteCurrency} pairs between MEXC and Gate`
+            `Loaded ${this.commonSymbols.length} ${this.quoteCurrency} futures pairs from MEXC/GATE universe`
           );
         }
 
@@ -80,10 +86,11 @@ export class MarketScanner {
   }
 
   async scanOnce() {
-    const marketSnapshot = await fetchMarketSnapshot(
+    const marketResult = await this.marketDataService.fetchMarketSnapshot(
       this.commonSymbols,
       this.min24hQuoteVolumeUsd
     );
+    const marketSnapshot = marketResult.items;
     const opportunities = buildOpportunities(marketSnapshot, this.thresholdPercent);
     const triggered = opportunities
       .filter((item) => item.isTriggered)
@@ -92,7 +99,7 @@ export class MarketScanner {
 
     const strongest = opportunities[0] || null;
     console.log(
-      `[scan] exchanges=${marketSnapshot.length} candidates=${opportunities.length} triggered=${triggered.length}${
+      `[scan] symbols=${marketSnapshot.length} mexc=${marketResult.meta.mexcCount}${marketResult.meta.mexcUsedCache ? "(cache)" : ""} gate=${marketResult.meta.gateCount}${marketResult.meta.gateUsedCache ? "(cache)" : ""} candidates=${opportunities.length} triggered=${triggered.length}${
         strongest ? ` | top=${formatCandidateLine(strongest)}` : ""
       }`
     );

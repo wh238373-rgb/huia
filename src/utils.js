@@ -113,6 +113,26 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export async function retry(fn, { retries = 2, delayMs = 1000 } = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === retries) {
+        break;
+      }
+
+      await sleep(delayMs * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+}
+
 export async function fetchJson(url, { timeoutMs = 30000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

@@ -28,7 +28,9 @@ const scanner = new MarketScanner({
   topSignals: config.topSignals,
   maxActiveSignals: config.maxActiveSignals,
   minSignalUpdateMs: config.minSignalUpdateMs,
-  min24hQuoteVolumeUsd: config.min24hQuoteVolumeUsd
+  min24hQuoteVolumeUsd: config.min24hQuoteVolumeUsd,
+  requestTimeoutMs: config.requestTimeoutMs,
+  requestRetries: config.requestRetries
 });
 
 console.log(

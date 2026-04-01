@@ -47,6 +47,8 @@ export const config = {
   maxActiveSignals: numberFromEnv("MAX_ACTIVE_SIGNALS", 3),
   minSignalUpdateMs: numberFromEnv("MIN_SIGNAL_UPDATE_MS", 15000),
   min24hQuoteVolumeUsd: numberFromEnv("MIN_24H_QUOTE_VOLUME_USD", 1000000),
+  requestTimeoutMs: numberFromEnv("REQUEST_TIMEOUT_MS", 45000),
+  requestRetries: numberFromEnv("REQUEST_RETRIES", 2),
   dryRun: String(process.env.DRY_RUN || "true").toLowerCase() === "true",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID || "",
