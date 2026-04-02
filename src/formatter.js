@@ -72,8 +72,8 @@ export function formatChannelMessage(opportunity) {
     `Ⓜ️ MC: ${formatUsdCompact(opportunity.marketCapUsd)} | ${assetName(opportunity.symbol)}`,
     "",
     `🎯 Вхід: ${direction}`,
-    `🟢 Ціна: ${formatFullPrice(currentPrice)}`,
-    `⚖️ Справедлива: ${formatFullPrice(fairPrice)}`,
+    `💵 Last price: ${formatFullPrice(currentPrice)}`,
+    `⚖️ Fair price: ${formatFullPrice(fairPrice)}`,
     "=========================",
     `💪 Макс. плече: ${maxLeverage}`,
     `💰 Макс. позиція: ${formatUsdInteger(maxPositionUsd)}`,
@@ -105,8 +105,8 @@ export function formatSignalClosedMessage(signal) {
     `💪 Макс. плече: ${maxLeverage}`,
     `💰 Макс. позиція: ${formatUsdInteger(maxPositionUsd)}`,
     "━━━━━━━━━━━━━━━━━━━━━━━",
-    "✅ Ціни зійшлись!",
-    `💰 Фінальна ціна: ${formatFullPrice(finalPrice)}`,
+    "✅ Fair price закінчилась",
+    `💵 Final last price: ${formatFullPrice(finalPrice)}`,
     `📊 Зміна у відсотках: ${formatSignedPercent(finalDeviation)}`,
     `⏱ Зійшлось через: ${formatDurationSeconds(signal.openedAt, signal.closedAt)}`
   ].join("\n");

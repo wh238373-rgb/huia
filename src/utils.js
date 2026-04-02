@@ -98,6 +98,7 @@ export function formatSignedPercent(value) {
 
 export function formatClock(date = new Date()) {
   return new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kyiv",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
